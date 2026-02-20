@@ -1,7 +1,7 @@
 import os
 import json
 from groq import Groq
-from functools import lru_cache  
+from functools import lru_cache
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ def _call_groq_api(user_prompt: str) -> str | None:
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"DEBUG ERROR: {type(e).__name__}: {e}")  # <-- only new line
+        print(f"DEBUG ERROR: {type(e).__name__}: {e}")
         return None
 
 
@@ -88,9 +88,14 @@ def _parse_response(raw: str) -> dict | None:
 # Public API — this is what other modules call
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=128)
 def verify_ic(scanned_text: str, oem_spec_text: str, ic_part_number: str) -> dict:
     """
     Verifies an IC chip marking against the OEM datasheet specification.
+
+    Caching: @lru_cache means identical inputs return instantly without
+    burning an API call. Protects against Groq free tier rate limits (30 RPM)
+    during repeated demo runs or testing.
 
     Args:
         scanned_text:    OCR-extracted text from the physical chip image.
