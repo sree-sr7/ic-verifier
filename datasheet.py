@@ -17,7 +17,7 @@ KEYWORD_PATTERNS = [
     "TOP"
 ]
 
-# 🚫 Pages to ignore — only checked in first 20% of page text now
+# 🚫 Pages to ignore — only checked in first 20% of page text
 IGNORE_WORDS = [
     "REVISION",
     "HISTORY",
@@ -27,17 +27,18 @@ IGNORE_WORDS = [
 
 
 # 🔎 Step 1 – Search datasheet links
+# FIX 7: Added timeout=10 to prevent DuckDuckGo hanging during demo
 def search_datasheet(ic_name):
     links = []
     try:
         with DDGS() as ddgs:
-            results = ddgs.text(f"{ic_name} datasheet pdf", max_results=5)
+            results = ddgs.text(f"{ic_name} datasheet pdf", max_results=5, timeout=10)
             for r in results:
                 url = r.get("href", "")
                 if ".pdf" in url.lower():
                     links.append(url)
     except Exception as e:
-        print("Search error:", e)
+        print(f"Search error: {e}")
     return links
 
 
@@ -57,7 +58,7 @@ def download_pdf(url, ic_name):
                 f.write(response.content)
             return filename
     except Exception as e:
-        print("Download error:", e)
+        print(f"Download error: {e}")
     return None
 
 
@@ -82,9 +83,10 @@ def score_page(text, ic_name):
 # 📄 Extract only relevant lines
 # FIX 4: Also keeps lines matching KEYWORD_PATTERNS, not just IC name
 #         Catches cases like "Top Mark: F103C8T6" where full IC name isn't repeated
+# FIX 9: re.escape() prevents crash on IC names with special chars like "LM358+" or "TL072/TL074"
 def extract_relevant_lines(text, ic_name):
     lines = text.split("\n")
-    ic_pattern = re.compile(ic_name, re.IGNORECASE)
+    ic_pattern = re.compile(re.escape(ic_name), re.IGNORECASE)
     relevant = []
     for line in lines:
         line_stripped = line.strip()
@@ -114,7 +116,7 @@ def extract_marking_section(pdf_path, ic_name, is_temp=False):
         result = extract_relevant_lines(best_text, ic_name) if best_text else ""
         return result
     except Exception as e:
-        print("PDF read error:", e)
+        print(f"PDF read error: {e}")
         return ""
     finally:
         # FIX 5: Delete temp downloaded files after reading — keeps project root clean
@@ -135,6 +137,7 @@ def load_fallback_pdfs():
 # 🚀 Main function – Datasheet Agent
 # FIX 6: Returns "" instead of "Marking section not found."
 #         Empty string triggers guard clause in verify.py correctly
+# FIX 8: Logs which source succeeded — useful during demo when judges ask
 def get_marking_from_datasheet(ic_name):
     # 1️⃣ Try online search
     links = search_datasheet(ic_name)
@@ -144,6 +147,7 @@ def get_marking_from_datasheet(ic_name):
             # is_temp=True so the downloaded file is deleted after reading
             text = extract_marking_section(pdf_file, ic_name, is_temp=True)
             if text:
+                print(f"✅ Datasheet found via online: {link}")
                 return text
 
     # 2️⃣ Use fallback PDFs
@@ -152,7 +156,9 @@ def get_marking_from_datasheet(ic_name):
         # is_temp=False — don't delete the permanent fallback files
         text = extract_marking_section(pdf, ic_name, is_temp=False)
         if text:
+            print(f"✅ Datasheet found via fallback: {pdf}")
             return text
 
     # FIX 6: Empty string instead of message string
+    print(f"⚠️ No datasheet found for: {ic_name}")
     return ""
